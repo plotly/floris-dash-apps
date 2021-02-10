@@ -5,73 +5,120 @@ from dash.dependencies import Input, Output, State
 import plotly.express as px
 
 
-def Col(*args, md=None, **kwargs):
-    if md is None:
-        class_name = f"col"
-    else:
-        class_name = f"col-12 col-md-{md}"
+# ############ Create custom components ############
+def build_component(class_name, component=html.Div):
+    def component_func(*args, className="", **kwargs):
+        return component(*args, className=class_name + " " + className, **kwargs)
 
+    return component_func
+
+
+def Col(*args, width, **kwargs):
+    class_name = f"col s{width}"
     return html.Div(*args, className=class_name, **kwargs)
 
 
-def Row(*args, **kwargs):
-    return html.Div(*args, className="row", **kwargs)
-
-
-def Header(name, app):
-    title = html.H1(name)
-    logo = html.Img(
-        src=app.get_asset_url("dash-logo.png"), style={"float": "right", "height": 60}
+def CustomSlider(id, min, max, label, **kwargs):
+    mid = int((min + max) / 2)
+    kwargs["value"] = kwargs.get("value", mid)
+    return html.Div(
+        [
+            html.P(label),
+            html.Br(),
+            dcc.Slider(
+                id=id,
+                min=min,
+                max=max,
+                marks={i: str(i) for i in [min, mid, max]},
+                tooltip={"always_visible": False},
+                **kwargs,
+            ),
+        ]
     )
-    link = html.A(logo, href="https://plotly.com/dash/")
-
-    return Row([Col(title, md=8), Col(link, md=4)])
 
 
+Row = build_component("row")
+Card = build_component("card")
+CardTitle = build_component("card-title")
+CardContent = build_component("card-content")
+CardAction = build_component("card-action")
+
+
+# ############ Load Data ############
 df = px.data.tips()
 days = df.day.unique()
 
-bootstrap_css = (
-    "https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta1/dist/css/bootstrap.min.css"
+# ############ Initialize app ############
+app = dash.Dash(
+    __name__,
+    external_stylesheets=[
+        "https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"
+    ],
+    external_scripts=[
+        "https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"
+    ],
 )
-app = dash.Dash(__name__, external_stylesheets=[bootstrap_css])
 server = app.server  # gunicorn needs this for deployment
 
+
+# ############ Define components and layouts ############
 controls = [
-    dcc.Dropdown(
-        id="dropdown", options=[{"label": x, "value": x} for x in days], value=days[0],
-    )
+    CustomSlider(id="wind-direction", min=250, max=290, label="Wind Direction"),
+    CustomSlider(id="yaw-angle", min=250, max=290, label="Yaw angle T1"),
+    CustomSlider(id="x-plane", min=0, max=3000, label="X Normal Plane Intercept"),
+    CustomSlider(id="y-plane", min=-100, max=100, label="Y Normal Plane Intercept"),
 ]
 
+
+navbar = html.Nav(
+    html.Div(
+        className="nav-wrapper teal",
+        children=[
+            html.Img(
+                src=app.get_asset_url("dash-logo.png"),
+                style={"float": "right", "height": "100%", "padding-right": "15px"},
+            ),
+            html.A(
+                "Floris Demo",
+                className="brand-logo",
+                href="https://plotly.com/dash/",
+                style={"padding-left": "15px"},
+            ),
+        ],
+    )
+)
+
+
+left_section = Card(
+    CardContent(
+        [
+            CardTitle("Results with GCH"),
+        ]
+    )
+)
+
+right_section = Card(CardContent([CardTitle("Results without GCH")]))
+
 app.layout = html.Div(
-    className="container",
+    # className="container",
+    style={"--slider_active": "teal"},
     children=[
-        Header("Floris Dash App", app),
-        html.Hr(),
+        navbar,
+        html.Br(),
+        Row(
+            Col(
+                width=12,
+                children=Card(CardContent(Row([Col(c, width=3) for c in controls]))),
+            )
+        ),
         Row(
             [
-                Col(
-                    html.Div(
-                        [
-                            html.Div("Controls", className="card-header"),
-                            html.Div(controls, className="card-body"),
-                        ],
-                        className="card",
-                    ),
-                    md=4,
-                ),
-                Col(dcc.Graph(id="bar-chart"), md=8),
+                Col(width=6, children=left_section),
+                Col(width=6, children=right_section),
             ]
         ),
     ],
 )
-
-
-@app.callback(Output("bar-chart", "figure"), [Input("dropdown", "value")])
-def update_bar_chart(day):
-    mask = df["day"] == day
-    fig = px.bar(df[mask], x="sex", y="total_bill", color="smoker", barmode="group")
-    return fig
 
 
 if __name__ == "__main__":
