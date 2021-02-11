@@ -8,10 +8,10 @@ from dash.dependencies import Input, Output, State
 import floris.tools as wfct
 import matplotlib.pyplot as plt
 
-import reusable_components as rc
+import reusable_components as rc  # see reusable_components.py
 
 
-# ############ Create helper functions and custom components ############
+# ############ Create helper functions ############
 def mpl_to_b64(fig, format="png", dpi=300, **kwargs):
     b_io = BytesIO()
     fig.savefig(b_io, format=format, bbox_inches="tight", dpi=dpi, **kwargs)
@@ -84,7 +84,7 @@ navbar = html.Nav(
 
 controls = [
     rc.CustomSlider(id="wind-direction", min=250, max=290, label="Wind Direction"),
-    rc.CustomSlider(id="yaw-1", min=-30, max=30, label="Yaw angle T1"),
+    rc.CustomSlider(id="yaw-angle", min=-30, max=30, label="Yaw angle T1"),
     rc.CustomSlider(
         id="x-loc", min=0, max=3000, value=500, label="X Normal Plane Intercept"
     ),
@@ -125,18 +125,14 @@ app.layout = html.Div(
         html.Br(),
         rc.Row(
             rc.Col(
+                rc.Card(rc.CardContent(rc.Row([rc.Col(c, width=3) for c in controls]))),
                 width=12,
-                children=rc.Card(
-                    rc.CardContent(rc.Row([rc.Col(c, width=3) for c in controls]))
-                ),
             )
         ),
         rc.Row(
             [
-                rc.Col(width=6, children=[html.H4("Results with GCH"), left_section]),
-                rc.Col(
-                    width=6, children=[html.H4("Results without GCH"), right_section]
-                ),
+                rc.Col([html.H4("Results with GCH"), left_section], width=6),
+                rc.Col([html.H4("Results without GCH"), right_section], width=6),
             ]
         ),
     ],
@@ -149,7 +145,7 @@ app.layout = html.Div(
     Output("gch-y-normal", "src"),
     Input("x-loc", "value"),
     Input("y-loc", "value"),
-    Input("yaw-1", "value"),
+    Input("yaw-angle", "value"),
     Input("wind-direction", "value"),
 )
 def gch_update(x_loc, y_loc, yaw_1, wd):
@@ -162,7 +158,7 @@ def gch_update(x_loc, y_loc, yaw_1, wd):
     Output("no-gch-y-normal", "src"),
     Input("x-loc", "value"),
     Input("y-loc", "value"),
-    Input("yaw-1", "value"),
+    Input("yaw-angle", "value"),
     Input("wind-direction", "value"),
 )
 def no_gch_update(x_loc, y_loc, yaw_1, wd):
