@@ -1,75 +1,69 @@
+import base64
+from io import BytesIO
+
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
 from dash.dependencies import Input, Output, State
-import plotly.express as px
+import floris.tools as wfct
+import matplotlib.pyplot as plt
+
+import reusable_components as rc
 
 
-# ############ Create custom components ############
-def build_component(class_name, component=html.Div):
-    def component_func(*args, className="", **kwargs):
-        return component(*args, className=class_name + " " + className, **kwargs)
-
-    return component_func
-
-
-def Col(*args, width, **kwargs):
-    class_name = f"col s{width}"
-    return html.Div(*args, className=class_name, **kwargs)
+# ############ Create helper functions and custom components ############
+def mpl_to_b64(fig, format="png", dpi=300, **kwargs):
+    b_io = BytesIO()
+    fig.savefig(b_io, format=format, bbox_inches="tight", dpi=dpi, **kwargs)
+    b64_enc = base64.b64encode(b_io.getvalue()).decode("utf-8")
+    return f"data:image/{format};base64," + b64_enc
 
 
-def CustomSlider(id, min, max, label, **kwargs):
-    mid = int((min + max) / 2)
-    kwargs["value"] = kwargs.get("value", mid)
-    return html.Div(
-        [
-            html.P(label),
-            html.Br(),
-            dcc.Slider(
-                id=id,
-                min=min,
-                max=max,
-                marks={i: str(i) for i in [min, mid, max]},
-                tooltip={"always_visible": False},
-                **kwargs,
-            ),
-        ]
+def build_visualizations(x_loc, y_loc, yaw_1, wd, gch, minSpeed=4, maxSpeed=8.0):
+    fi = wfct.floris_interface.FlorisInterface("./data/example_input.json")
+    fi.set_gch(gch)
+    fi.reinitialize_flow_field(
+        wind_direction=wd, layout_array=((0, 126 * 7, 126 * 14), (0, 0, 0))
     )
+    fi.calculate_wake(yaw_angles=[yaw_1, 0, 0])
 
+    # Horizontal plane
+    fig, ax = plt.subplots()
+    wfct.visualization.visualize_cut_plane(
+        fi.get_hor_plane(), ax=ax, minSpeed=minSpeed, maxSpeed=maxSpeed
+    )
+    ax.axhline(y_loc, color="w", ls="--", lw=1)
+    ax.axvline(x_loc, color="w", ls="--", lw=1)
+    horiz_b64 = mpl_to_b64(fig)
+    plt.close(fig)
 
-Row = build_component("row")
-Card = build_component("card")
-CardTitle = build_component("card-title")
-CardContent = build_component("card-content")
-CardAction = build_component("card-action")
+    # Cross (x-normal) plane
+    fig, ax = plt.subplots()
+    wfct.visualization.visualize_cut_plane(
+        fi.get_cross_plane(x_loc=x_loc), ax=ax, minSpeed=minSpeed, maxSpeed=maxSpeed
+    )
+    wfct.visualization.reverse_cut_plane_x_axis_in_plot(ax)
+    x_plane_b64 = mpl_to_b64(fig)
+    plt.close(fig)
 
+    # Cross (y-normal) plane
+    fig, ax = plt.subplots()
+    wfct.visualization.visualize_cut_plane(
+        fi.get_y_plane(y_loc=y_loc), ax=ax, minSpeed=minSpeed, maxSpeed=maxSpeed
+    )
+    wfct.visualization.reverse_cut_plane_x_axis_in_plot(ax)
+    y_plane_b64 = mpl_to_b64(fig)
+    plt.close(fig)
 
-# ############ Load Data ############
-df = px.data.tips()
-days = df.day.unique()
+    return horiz_b64, x_plane_b64, y_plane_b64
+
 
 # ############ Initialize app ############
-app = dash.Dash(
-    __name__,
-    external_stylesheets=[
-        "https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"
-    ],
-    external_scripts=[
-        "https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"
-    ],
-)
-server = app.server  # gunicorn needs this for deployment
+app = dash.Dash(__name__, external_stylesheets=[rc.MATERALIZE_CSS])
+server = app.server
 
 
-# ############ Define components and layouts ############
-controls = [
-    CustomSlider(id="wind-direction", min=250, max=290, label="Wind Direction"),
-    CustomSlider(id="yaw-angle", min=250, max=290, label="Yaw angle T1"),
-    CustomSlider(id="x-plane", min=0, max=3000, label="X Normal Plane Intercept"),
-    CustomSlider(id="y-plane", min=-100, max=100, label="Y Normal Plane Intercept"),
-]
-
-
+# ############ Build components and layouts ############
 navbar = html.Nav(
     html.Div(
         className="nav-wrapper teal",
@@ -88,38 +82,92 @@ navbar = html.Nav(
     )
 )
 
+controls = [
+    rc.CustomSlider(id="wind-direction", min=250, max=290, label="Wind Direction"),
+    rc.CustomSlider(id="yaw-1", min=-30, max=30, label="Yaw angle T1"),
+    rc.CustomSlider(
+        id="x-loc", min=0, max=3000, value=500, label="X Normal Plane Intercept"
+    ),
+    rc.CustomSlider(id="y-loc", min=-100, max=100, label="Y Normal Plane Intercept"),
+]
 
-left_section = Card(
-    CardContent(
+left_section = rc.Card(
+    rc.CardContent(
         [
-            CardTitle("Results with GCH"),
+            rc.CardTitle("Horizontal Cut Plane"),
+            html.Img(id="gch-horizontal", style={"width": "100%"}),
+            rc.CardTitle("Cross (X-Normal) Cut Plane"),
+            html.Img(id="gch-x-normal", style={"width": "100%"}),
+            rc.CardTitle("Cross (Y-Normal) Cut Plane"),
+            html.Img(id="gch-y-normal", style={"width": "100%"}),
         ]
     )
 )
 
-right_section = Card(CardContent([CardTitle("Results without GCH")]))
+right_section = rc.Card(
+    rc.CardContent(
+        [
+            rc.CardTitle("Horizontal Cut Plane"),
+            html.Img(id="no-gch-horizontal", style={"width": "100%"}),
+            rc.CardTitle("Cross (X-Normal) Cut Plane"),
+            html.Img(id="no-gch-x-normal", style={"width": "100%"}),
+            rc.CardTitle("Cross (Y-Normal) Cut Plane"),
+            html.Img(id="no-gch-y-normal", style={"width": "100%"}),
+        ]
+    )
+)
 
 app.layout = html.Div(
-    # className="container",
     style={"--slider_active": "teal"},
+    className="container",
     children=[
         navbar,
         html.Br(),
-        Row(
-            Col(
+        rc.Row(
+            rc.Col(
                 width=12,
-                children=Card(CardContent(Row([Col(c, width=3) for c in controls]))),
+                children=rc.Card(
+                    rc.CardContent(rc.Row([rc.Col(c, width=3) for c in controls]))
+                ),
             )
         ),
-        Row(
+        rc.Row(
             [
-                Col(width=6, children=left_section),
-                Col(width=6, children=right_section),
+                rc.Col(width=6, children=[html.H4("Results with GCH"), left_section]),
+                rc.Col(
+                    width=6, children=[html.H4("Results without GCH"), right_section]
+                ),
             ]
         ),
     ],
 )
 
 
+@app.callback(
+    Output("gch-horizontal", "src"),
+    Output("gch-x-normal", "src"),
+    Output("gch-y-normal", "src"),
+    Input("x-loc", "value"),
+    Input("y-loc", "value"),
+    Input("yaw-1", "value"),
+    Input("wind-direction", "value"),
+)
+def gch_update(x_loc, y_loc, yaw_1, wd):
+    return build_visualizations(x_loc, y_loc, yaw_1, wd, gch=True)
+
+
+@app.callback(
+    Output("no-gch-horizontal", "src"),
+    Output("no-gch-x-normal", "src"),
+    Output("no-gch-y-normal", "src"),
+    Input("x-loc", "value"),
+    Input("y-loc", "value"),
+    Input("yaw-1", "value"),
+    Input("wind-direction", "value"),
+)
+def no_gch_update(x_loc, y_loc, yaw_1, wd):
+    return build_visualizations(x_loc, y_loc, yaw_1, wd, gch=False)
+
+
 if __name__ == "__main__":
-    app.run_server(debug=True)
+    app.run_server(debug=True, threaded=False, processes=2)
