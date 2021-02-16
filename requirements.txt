@@ -12,6 +12,7 @@ dash-core-components==1.15.0
 dash-html-components==1.1.2
 dash-renderer==1.9.0
 dash-table==4.11.2
+dash-vtk==0.0.4
 decorator==4.4.2
 Flask==1.1.2
 Flask-Compress==1.8.0
@@ -66,5 +67,6 @@ tornado==6.1
 traitlets==5.0.5
 typed-ast==1.4.2
 typing-extensions==3.7.4.3
+vtk==9.0.1
 wcwidth==0.2.5
 Werkzeug==1.0.1
