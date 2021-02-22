@@ -119,7 +119,7 @@ right_section = rc.Card(
 
 app.layout = html.Div(
     style={"--slider_active": "teal"},
-    className="container",
+    # className="container",
     children=[
         navbar,
         html.Br(),
