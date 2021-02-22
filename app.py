@@ -73,7 +73,7 @@ navbar = html.Nav(
                 style={"float": "right", "height": "100%", "padding-right": "15px"},
             ),
             html.A(
-                "Floris Demo",
+                "GCH and Cut Plane Visualization in FLORIS",
                 className="brand-logo",
                 href="https://plotly.com/dash/",
                 style={"padding-left": "15px"},
